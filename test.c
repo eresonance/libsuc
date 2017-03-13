@@ -1,4 +1,4 @@
-
+#ifdef SUC_TEST_MAIN
 #include <assert.h>
 #include <stdio.h>
 
@@ -41,3 +41,5 @@ int main(void)
 
     return 0;
 }
+#endif
+
