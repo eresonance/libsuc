@@ -52,6 +52,11 @@ typedef struct _suc_range {
 #define range(...) SUC_VFUNC(_range_obj_, __VA_ARGS__)
 
 /**
+ * Same as range(...) but as a const expression for initializing
+ */
+#define range_init(...) SUC_VFUNC(_range_const_, __VA_ARGS__)
+
+/**
  * Loop int var over a pointer to a suc_range object.
  * var has only inner scope.
  *
@@ -60,7 +65,7 @@ typedef struct _suc_range {
  *   printf("i = %d\n", i);
  * }
  */
-#define for_in(var, range) for(suc_range *_r=(range); _r; _r=NULL) \
+#define for_in(var, range) for(const suc_range *_r=(range); _r; _r=NULL) \
                            for(int _i=0, _end=abs((_r->stop - _r->start)/_r->step), _d=1; _d; _d=0) \
                            for(int var=_r->start; _i < _end; var += _r->step, _i++)
 
@@ -76,13 +81,16 @@ typedef struct _suc_range {
  * }
  * if(i < timeout) <error>
  */
-#define for_ex_in(var, range) for(suc_range *_r=(range); _r; _r=NULL) \
+#define for_ex_in(var, range) for(const suc_range *_r=(range); _r; _r=NULL) \
                               for(int _i=0, _end=abs((_r->stop - _r->start)/_r->step), _d=1; _d; _d=0) \
                               for(var=_r->start; _i < _end; var += _r->step, _i++)
 
 // Internal stuff below, don't use these directly
-#define _range_obj_1(astop)                (suc_range){.start=0, .stop=(astop), .step=1}
-#define _range_obj_2(astart, astop)        (suc_range){.start=(astart), .stop=(astop), .step=1}
-#define _range_obj_3(astart, astop, astep) (suc_range){.start=(astart), .stop=(astop), .step=(astep)}
+#define _range_obj_1(astop)                (suc_range)_range_const_1(astop)
+#define _range_obj_2(astart, astop)        (suc_range)_range_const_2(astart, astop)
+#define _range_obj_3(astart, astop, astep) (suc_range)_range_const_3(astart, astop, astep)
+#define _range_const_1(astop)                {.start=0, .stop=(astop), .step=1}
+#define _range_const_2(astart, astop)        {.start=(astart), .stop=(astop), .step=1}
+#define _range_const_3(astart, astop, astep) {.start=(astart), .stop=(astop), .step=(astep)}
 
 #endif //_SUC_RANGE_H_

@@ -27,11 +27,17 @@ int main(void)
     assert(t3.step==-1);
     
     int i;
-    for_out_in(i, &t3) {
+    for_ex_in(i, &t3) {
         printf("i = %d\n", i);
     }
     printf("end i=%d\n", i);
     assert(i == t3.stop);
     
+    const int start = 1, stop = 2;
+    const suc_range *t4 = &range(start, stop);
+    for_in(idx, t4) {
+        printf("idx = %d\n", idx);
+    }
+
     return 0;
 }
