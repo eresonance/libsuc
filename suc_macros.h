@@ -43,4 +43,14 @@
 // virtual fn that will eval to the correct one with '_*' added to the end
 #define SUC_VFUNC(func, ...) SUC_CAT(func, _SUC_NARG_(__VA_ARGS__))(__VA_ARGS__)
 
+// why these aren't in stdlib I have no idea...
+#define SUC_MAX(a,b) ({ \
+    __typeof__(a) _a = (a); \
+    __typeof__(b) _b = (b); \
+    _a > _b ? _a : _b; })
+#define SUC_MIN(a,b) ({ \
+    __typeof__(a) _a = (a); \
+    __typeof__(b) _b = (b); \
+    _a < _b ? _a : _b; })
+
 #endif //_SUC_MACROS_H_

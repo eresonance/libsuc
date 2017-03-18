@@ -29,8 +29,9 @@
 #ifndef _SUC_SSA_H_
 #define _SUC_SSA_H_
 
-#include "suc_macros.h"
 #include <stdlib.h>
+#include <assert.h>
+#include <string.h>
 
 #ifndef SSA_SIZE_TYPE
 #define SSA_SIZE_TYPE size_t
@@ -47,13 +48,15 @@ struct ssa_attr {
     char buf[];
 };
 
+#if 0 //an example
 //type can be called whatever you like
 struct some_type {
     //and the attributes can be called whatever you like...
     struct ssa_attr whatever;
     //but must appear directly above your array
-    uint32_t stuff[100];
+    int stuff[100];
 };
+#endif
 
 //get the ssa header used to keep attributes from an array
 #define SSA_HDR(array) ((struct ssa_attr*)(((char *)array)-(sizeof(struct ssa_attr*))))
@@ -65,32 +68,32 @@ struct some_type {
  */
 #define ssa_new_empty(container, aname) ({ \
     __typeof__(container) tc = &(*container); /*container must be a ptr*/ \
-    (__typeof__(tc->aname))_ssa_new(SSA_HDR(tc->aname), sizeof(tc->aname), sizeof(tc->aname[0]), NULL, 0); \
+    (__typeof__(tc->aname[0])*)_ssa_new(SSA_HDR(tc->aname), sizeof(tc->aname), sizeof(tc->aname[0]), NULL, 0); \
     })
 
 //makes a new array based on an existing one
 #define ssa_new(container, aname, init, init_size) ({ \
     __typeof__(container) tc = &(*container); /*container must be a ptr*/ \
-    (__typeof__(tc->aname))_ssa_new(SSA_HDR(tc->aname), sizeof(tc->aname), sizeof(tc->aname[0]), (init), (init_size)); \
+    (__typeof__(tc->aname[0])*)_ssa_new(SSA_HDR(tc->aname), sizeof(tc->aname), sizeof(tc->aname[0]), (init), (init_size)); \
     })
 
 //length of array in use
 static inline size_t ssa_length(const void *array)
 {
-    return SSA_HDR(array)->length;
+    return SSA_HDR(array)->len;
 }
 
 //size of the array that's been used, len*sizeof(array[0])
 static inline size_t ssa_size(const void *array)
 {
-    struct ssa_attr *attr = SSA_HDR(array);
+    const struct ssa_attr *attr = SSA_HDR(array);
     return attr->len*attr->esz;
 }
 
 //available number of elements in array that are not in use, alloc/sizeof(array[0])-len
 static inline size_t ssa_avail(const void *array)
 {
-    struct ssa_attr *attr = SSA_HDR(array);
+    const struct ssa_attr *attr = SSA_HDR(array);
     return attr->alloc/attr->esz - attr->len;
 }
 
@@ -104,30 +107,30 @@ static inline void ssa_clear(void *array)
 void ssa_resize(void *array, size_t new_length);
 
 //copy the contents of other into ssa array at index i
-void ssa_cpy(void *array, size_t i, void *other, size_t other_size);
+void ssa_cpy(void *array, size_t i, const void *other, size_t other_size);
 
 //copy the contents of other onto the end of ssa array
-static inline void ssa_cat(void *array, void *other, size_t other_size)
+static inline void ssa_cat(void *array, const void *other, size_t other_size)
 {
     ssa_cpy(array, SSA_HDR(array)->len, other, other_size);
 }
 
 //copy the contents of ssa other_ssa onto the end of ssa array
-static inline void ssa_cat_ssa(void *array, void *other_ssa)
+static inline void ssa_cat_ssa(void *array, const void *other_ssa)
 {
     struct ssa_attr *attr = SSA_HDR(array);
-    struct ssa_attr *oattr = SSA_HDR(other_ssa);
-    assert(attr->e_sz == oattr->e_sz);
+    const struct ssa_attr *oattr = SSA_HDR(other_ssa);
+    assert(attr->esz == oattr->esz);
     //won't do anything if other_ssa is too big
     ssa_cpy(array, attr->len, other_ssa, oattr->len*oattr->esz);
 }
 
 //copy the contents of ssa other_ssa over the contents of ssa array, setting ssa array's size to that of ssa other_ssa
-static inline void ssa_replace(void *array, void *other_ssa)
+static inline void ssa_replace(void *array, const void *other_ssa)
 {
     struct ssa_attr *attr = SSA_HDR(array);
-    struct ssa_attr *oattr = SSA_HDR(other_ssa);
-    assert(attr->e_sz == oattr->e_sz);
+    const struct ssa_attr *oattr = SSA_HDR(other_ssa);
+    assert(attr->esz == oattr->esz);
     ssa_cpy(array, 0, other_ssa, ssa_size(other_ssa));
     //ssa_cpy will already set attr->length if it grew, so set it here only if it shrunk
     if(oattr->len < attr->len) {
@@ -136,13 +139,13 @@ static inline void ssa_replace(void *array, void *other_ssa)
 }
 
 //copies a portion of ssa array to ssa slice, replacing its contents
-void ssa_slice(void *array, size_t start, size_t end, void *slice);
+void ssa_slice(const void *array, size_t start, size_t end, void *slice);
 
 //safely push/append value to the end of an ssa array, if there is room
 //value and typeof(array) must be an assignable type, otherwise use ssa_cat
 #define ssa_push(array, value) do { \
     struct ssa_attr *attr = SSA_HDR(array); \
-    if(attr->len < attr->alloc*attr->sz) { \
+    if(attr->len < attr->alloc*attr->esz) { \
         (array)[attr->len] = (value); \
         attr->len++; \
     } }while(0)
@@ -172,6 +175,6 @@ void ssa_slice(void *array, size_t start, size_t end, void *slice);
 /************** Internal stuff *************/
 
 //helper method
-void* _ssa_new(struct ssa_attr *attr, size_t a_sz, size_t e_sz, const void *init, size_t init_sz);
+void* _ssa_new(struct ssa_attr *attr, size_t a_sz, size_t esz, const void *init, size_t init_sz);
 
 #endif //_SUC_SSA_H_
