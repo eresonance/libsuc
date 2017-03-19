@@ -45,6 +45,8 @@ struct ssa_attr {
     SSA_SIZE_TYPE len;
     //size of each element
     uint16_t esz;
+    //used for error checking
+    uint8_t _pmagic;
     //intentional padding that stores the diff from buf to alloc, don't access directly, use SSA_PDIFF instead
     uint8_t _pdiff;
 };
@@ -61,6 +63,12 @@ struct some_type {
 
 //get a pointer to the diff between array and ssa_attr
 #define SSA_PDIFF(array) (uint8_t*)((char*)array-1)
+//pointer to the magic number
+#define SSA_PMAGIC(array) (uint8_t*)((char*)array-2)
+//something with a fair number of bits set and also prime, making it more unlikely to be found in "random" data
+#define SSA_MAGIC 0xa7
+//macro to raise an error if the array hasn't been initialized with ssa_new*
+#define SSA_ASSERT_INIT(array) assert(*SSA_PMAGIC(array) == SSA_MAGIC && "not initialized")
 
 //get the ssa header used to keep attributes from an array
 #define SSA_HDR(array) ((struct ssa_attr*)(((char *)array)-*SSA_PDIFF(array)))
@@ -86,12 +94,14 @@ struct some_type {
 //length of array in use
 static inline size_t ssa_length(const void *array)
 {
+    SSA_ASSERT_INIT(array);
     return SSA_HDR(array)->len;
 }
 
 //size of the array that's been used, len*sizeof(array[0])
 static inline size_t ssa_size(const void *array)
 {
+    SSA_ASSERT_INIT(array);
     const struct ssa_attr *attr = SSA_HDR(array);
     return attr->len*attr->esz;
 }
@@ -99,6 +109,7 @@ static inline size_t ssa_size(const void *array)
 //available number of elements in array that are not in use, alloc/sizeof(array[0])-len
 static inline size_t ssa_avail(const void *array)
 {
+    SSA_ASSERT_INIT(array);
     const struct ssa_attr *attr = SSA_HDR(array);
     return attr->alloc/attr->esz - attr->len;
 }
@@ -106,6 +117,7 @@ static inline size_t ssa_avail(const void *array)
 //clear an array, setting length=0
 static inline void ssa_clear(void *array)
 {
+    SSA_ASSERT_INIT(array);
     SSA_HDR(array)->len = 0;
 }
 
@@ -124,6 +136,8 @@ static inline void ssa_cat(void *array, const void *other, size_t other_size)
 //copy the contents of ssa other_ssa onto the end of ssa array
 static inline void ssa_cat_ssa(void *array, const void *other_ssa)
 {
+    SSA_ASSERT_INIT(array);
+    SSA_ASSERT_INIT(other_ssa);
     struct ssa_attr *attr = SSA_HDR(array);
     const struct ssa_attr *oattr = SSA_HDR(other_ssa);
     assert(attr->esz == oattr->esz);
@@ -134,6 +148,8 @@ static inline void ssa_cat_ssa(void *array, const void *other_ssa)
 //copy the contents of ssa other_ssa over the contents of ssa array, setting ssa array's size to that of ssa other_ssa
 static inline void ssa_replace(void *array, const void *other_ssa)
 {
+    SSA_ASSERT_INIT(array);
+    SSA_ASSERT_INIT(other_ssa);
     struct ssa_attr *attr = SSA_HDR(array);
     const struct ssa_attr *oattr = SSA_HDR(other_ssa);
     assert(attr->esz == oattr->esz);

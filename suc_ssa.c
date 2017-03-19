@@ -32,6 +32,7 @@
 //resize length, zeroing new elements if expanding
 void ssa_resize(void *array, size_t new_length)
 {
+    SSA_ASSERT_INIT(array);
     struct ssa_attr *attr = SSA_HDR(array);
     char *buf = array;
     if(attr->len == new_length) {
@@ -50,6 +51,7 @@ void ssa_resize(void *array, size_t new_length)
 //copy the contents of other into ssa array at index i
 void ssa_cpy(void *array, size_t i, const void *other, size_t other_size)
 {
+    SSA_ASSERT_INIT(array);
     struct ssa_attr *attr = SSA_HDR(array);
     char *buf = array;
     //if i is too big, other/other_size aren't set
@@ -73,9 +75,11 @@ void ssa_cpy(void *array, size_t i, const void *other, size_t other_size)
     }
 }
 
-//copies a portion of ssa array to ssa slice, replacing its contents
+//copies a portion of ssa array, from start to the element before end, into ssa slice, replacing its contents
 void ssa_slice(const void *array, size_t start, size_t end, void *slice)
 {
+    SSA_ASSERT_INIT(array);
+    SSA_ASSERT_INIT(slice);
     const struct ssa_attr *attr = SSA_HDR(array);
     const char *buf = array;
     struct ssa_attr *oattr = SSA_HDR(slice);
@@ -103,6 +107,8 @@ void* _ssa_new(struct ssa_attr *attr, void *array, size_t alloc, size_t esz, con
     
     //store the array-ssa_attr in the padding and/or the _pdiff member
     *SSA_PDIFF(array) = buf-(char*)attr;
+    //magic number used for kinda meh error checking
+    *SSA_PMAGIC(array) = SSA_MAGIC;
     
     attr->alloc = alloc;
     attr->esz = esz;
@@ -129,7 +135,8 @@ void* _ssa_new(struct ssa_attr *attr, void *array, size_t alloc, size_t esz, con
 
 struct test_uint{
     struct ssa_attr attr;
-    uint32_t array[100];
+    uint32_t array[20];
+    uint32_t padding[4];
 };
 
 struct node {
@@ -151,11 +158,14 @@ void print_ssa_attr(struct ssa_attr *attr)
 }
 
 int main(void) {
-    struct test_uint t1;
-    //make mem view a bit easier to look at
-    memset(&t1, 0, sizeof(t1));
+    struct test_uint t1, t2;
+    memset(t1.padding, 0x5a, sizeof(t1.padding));
+    uint32_t *a1, *a2;
+    const uint32_t d1[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+    int i, j;
     
-    uint32_t* a1 = ssa_new_empty(&t1.attr, t1.array);
+    puts("\nTest empty ssa creation");
+    a1 = ssa_new_empty(&t1.attr, t1.array);
     
     #if 0
     for(char* c=(char*)&t1; c<(char*)t1.array; c++) {
@@ -171,7 +181,116 @@ int main(void) {
     print_ssa_attr(SSA_HDR(a1));
     
     assert(ssa_length(a1) == 0);
-    assert(ssa_avail(a1) == sizeof(t1.array)/sizeof(t1.array[0]));
+    assert(ssa_avail(a1) == SUC_LEN(t1.array));
+    
+    
+    puts("\nTest ssa creation and init");
+    a1 = ssa_new(&t1.attr, t1.array, d1, sizeof(d1));
+    
+    print_ssa_attr(SSA_HDR(a1));
+    
+    assert(ssa_length(a1) == SUC_LEN(d1));
+    assert(ssa_avail(a1) == SUC_LEN(t1.array)-SUC_LEN(d1));
+    assert(ssa_size(a1) == sizeof(d1));
+    
+    puts("\nTest set/get");
+    for(i=0; i<ssa_length(a1); i++) {
+        printf("a1[%d] = %u = %u\n", i, a1[i], ssa_get(a1, i));
+        assert(a1[i] == d1[i]);
+        assert(ssa_get(a1, i) == d1[i]);
+    }
+    //write outside bounds
+    a1[i] = 0xdeadbeef;
+    assert(ssa_get(a1, i) == 0);
+    ssa_set(a1, i, 0xcafebabe);
+    assert(a1[i] == 0xdeadbeef);
+    
+    puts("\nTest resize");
+    ssa_resize(a1, ssa_length(a1)+3);
+    //make sure the 0xdeadbeef got zeroed out
+    assert(ssa_get(a1, i) == 0);
+    assert(a1[i] == 0);
+    assert(ssa_length(a1) > i);
+    ssa_set(a1, i, 0xcafebabe);
+    assert(ssa_get(a1, i) == 0xcafebabe);
+    
+    puts("\nTest clear");
+    ssa_clear(a1);
+    assert(ssa_length(a1) == 0);
+    
+    puts("\nTest cpy/cat");
+    ssa_cat(a1, d1, sizeof(d1));
+    ssa_cat(a1, d1, sizeof(d1));
+    assert(ssa_length(a1) == SUC_LEN(d1)*2);
+    i = SUC_LEN(d1)+2;
+    assert(ssa_get(a1, i) == d1[i%SUC_LEN(d1)]);
+    
+    //array should only be d1*2 in length
+    assert(ssa_avail(a1) == 0);
+    
+    //this is an illegal access, just to make sure we don't access the padding member
+    i = SUC_LEN(t1.array);
+    printf("a1[i] too big = 0x%08x\n", a1[i]);
+    assert(a1+i == t1.padding);
+    assert(a1[i] == t1.padding[0]);
+    assert(ssa_get(a1, i) == 0);
+    ssa_set(a1, i, 0xcafebabe);
+    assert(t1.padding[0] != 0xcafebabe);
+    
+    
+    puts("\nTest cat_ssa/replace");
+    //accessing an ssa that hasn't been initialized is illegal, the following should throw an error
+    //ssa_cat_ssa(t2.array, a1);
+    a2 = ssa_new(&t2.attr, t2.array, a1, ssa_size(a1));
+    assert(ssa_length(a2) == ssa_length(a1));
+    
+    //this won't do anything because array is too small to hold all the values
+    i = ssa_length(a2);
+    ssa_cat_ssa(a2, a1);
+    assert(i == ssa_length(a2));
+    
+    //clear both, resize a1 and fill with d1, then replace/copy a1 to a2
+    ssa_clear(a1);
+    ssa_clear(a2);
+    memset(a2, 0, SSA_HDR(a2)->alloc);
+    ssa_resize(a1, SUC_LEN(d1));
+    //should be zeroed
+    assert(a1[5] == 0);
+    
+    ssa_cpy(a1, 0, d1, sizeof(d1));
+    assert(ssa_length(a1) == SUC_LEN(d1));
+    assert(a1[5] == d1[5]);
+    
+    ssa_replace(a2, a1);
+    assert(ssa_length(a1) == ssa_length(a2));
+    for(i = 0; i<ssa_length(a1); i++) {
+        assert(ssa_get(a1, i) == ssa_get(a2, i));
+    }
+    
+    //should be room now
+    i = ssa_length(a1);
+    ssa_cat_ssa(a2, a1);
+    assert(ssa_length(a2) == i*2);
+    //make sure ssa_new/cat didn't copy that padding
+    assert(ssa_get(a2, i) == a1[0]);
+    
+    
+    puts("\nTest slice");
+    i = 1;
+    j = 5;
+    ssa_slice(a2, i, j, a1);
+    assert(ssa_length(a1) == j-i);
+    assert(a1[0] == ssa_get(a2, i));
+    assert(a1[1] == d1[i+1]);
+    
+    for(i=0; i<ssa_length(a2); i++) {
+        printf("a2[%d] = %u\n", i, ssa_get(a2, i));
+    }
+    for(i=0; i<ssa_length(a1); i++) {
+        printf("a1[%d] = %u = %u\n", i, a1[i], ssa_get(a1, i));
+    }
+    
+    
     
     return 0;
 }

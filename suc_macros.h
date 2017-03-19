@@ -53,4 +53,6 @@
     __typeof__(b) _b = (b); \
     _a < _b ? _a : _b; })
 
+#define SUC_LEN(x) (sizeof(x)/sizeof(x[0]))
+
 #endif //_SUC_MACROS_H_
