@@ -32,6 +32,7 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <string.h>
+#include <stdint.h>
 
 #ifndef SSA_SIZE_TYPE
 #define SSA_SIZE_TYPE size_t
@@ -43,9 +44,9 @@ struct ssa_attr {
     //num of used elements
     SSA_SIZE_TYPE len;
     //size of each element
-    SSA_SIZE_TYPE esz;
-    //buf ptr
-    char buf[];
+    uint16_t esz;
+    //intentional padding that stores the diff from buf to alloc, don't access directly, use SSA_PDIFF instead
+    uint8_t _pdiff;
 };
 
 #if 0 //an example
@@ -58,23 +59,28 @@ struct some_type {
 };
 #endif
 
+//get a pointer to the diff between array and ssa_attr
+#define SSA_PDIFF(array) (uint8_t*)((char*)array-1)
+
 //get the ssa header used to keep attributes from an array
-#define SSA_HDR(array) ((struct ssa_attr*)(((char *)array)-(sizeof(struct ssa_attr*))))
+#define SSA_HDR(array) ((struct ssa_attr*)(((char *)array)-*SSA_PDIFF(array)))
 
 /** initializes a new array of len 0, returning a pointer to the array
  * container: pointer to the struct containing the array and the ssa_attr
  * aname: name of the array element in container
  * returns: Pointer to the array, which you don't have to use
  */
-#define ssa_new_empty(container, aname) ({ \
-    __typeof__(container) tc = &(*container); /*container must be a ptr*/ \
-    (__typeof__(tc->aname[0])*)_ssa_new(SSA_HDR(tc->aname), sizeof(tc->aname), sizeof(tc->aname[0]), NULL, 0); \
+#define ssa_new_empty(ssa_attr, array) ({ \
+    __typeof__(ssa_attr) ts = &(*ssa_attr); /*ssa_attr must be a ptr*/ \
+    __typeof__(array[0])* ta = &(*array); /*array must be a ptr*/ \
+    (__typeof__(array[0])*)_ssa_new(ts, ta, sizeof(array), sizeof(array[0]), NULL, 0); \
     })
 
 //makes a new array based on an existing one
-#define ssa_new(container, aname, init, init_size) ({ \
-    __typeof__(container) tc = &(*container); /*container must be a ptr*/ \
-    (__typeof__(tc->aname[0])*)_ssa_new(SSA_HDR(tc->aname), sizeof(tc->aname), sizeof(tc->aname[0]), (init), (init_size)); \
+#define ssa_new(ssa_attr, array, init, init_size) ({ \
+    __typeof__(ssa_attr) ts = &(*ssa_attr); /*ssa_attr must be a ptr*/ \
+    __typeof__(array[0])* ta = &(*array); /*array must be a ptr*/ \
+    (__typeof__(array[0])*)_ssa_new(ts, ta, sizeof(array), sizeof(array[0]), (init), (init_size)); \
     })
 
 //length of array in use
@@ -175,6 +181,6 @@ void ssa_slice(const void *array, size_t start, size_t end, void *slice);
 /************** Internal stuff *************/
 
 //helper method
-void* _ssa_new(struct ssa_attr *attr, size_t a_sz, size_t esz, const void *init, size_t init_sz);
+void* _ssa_new(struct ssa_attr *attr, void *array, size_t alloc, size_t esz, const void *init, size_t init_sz);
 
 #endif //_SUC_SSA_H_

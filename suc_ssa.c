@@ -33,6 +33,7 @@
 void ssa_resize(void *array, size_t new_length)
 {
     struct ssa_attr *attr = SSA_HDR(array);
+    char *buf = array;
     if(attr->len == new_length) {
         return;
     }
@@ -41,7 +42,7 @@ void ssa_resize(void *array, size_t new_length)
         new_length = SUC_MIN(attr->alloc/attr->esz, new_length);
         //need to zero out the new mem
         size_t count = (new_length-attr->len)*attr->esz;
-        memset(attr->buf+attr->len*attr->esz, 0, count);
+        memset(buf+attr->len*attr->esz, 0, count);
     }
     attr->len = new_length;
 }
@@ -50,6 +51,7 @@ void ssa_resize(void *array, size_t new_length)
 void ssa_cpy(void *array, size_t i, const void *other, size_t other_size)
 {
     struct ssa_attr *attr = SSA_HDR(array);
+    char *buf = array;
     //if i is too big, other/other_size aren't set
     if((i > attr->alloc/attr->esz) || !other || !other_size) {
         return;
@@ -57,15 +59,15 @@ void ssa_cpy(void *array, size_t i, const void *other, size_t other_size)
     //if i is beyond the length of the array, zero out the difference
     if(i > attr->len) {
         size_t count = (i-attr->len)*attr->esz;
-        memset(attr->buf+attr->len*attr->esz, 0, count);
+        memset(buf+attr->len*attr->esz, 0, count);
     }
-    char *start = attr->buf+i*attr->esz;
+    char *start = buf+i*attr->esz;
     //end of the allocated array or the end of other
-    char *end = SUC_MIN(attr->buf+attr->alloc, start+other_size);
+    char *end = SUC_MIN(buf+attr->alloc, start+other_size);
     //copy as many bytes from other as we can
     memcpy(start, other, end-start);
     //only set len if it grew
-    size_t new_length = (end-attr->buf)/attr->esz;
+    size_t new_length = (end-buf)/attr->esz;
     if(new_length > attr->len) {
         attr->len = new_length;
     }
@@ -75,6 +77,7 @@ void ssa_cpy(void *array, size_t i, const void *other, size_t other_size)
 void ssa_slice(const void *array, size_t start, size_t end, void *slice)
 {
     const struct ssa_attr *attr = SSA_HDR(array);
+    const char *buf = array;
     struct ssa_attr *oattr = SSA_HDR(slice);
     assert(attr->esz == oattr->esz);
     //end has to be > start, no support for -ve indexes right now
@@ -84,32 +87,36 @@ void ssa_slice(const void *array, size_t start, size_t end, void *slice)
     if((start >= attr->len) || (end >= attr->len) || (slice_sz > oattr->alloc)) {
         return;
     }
-    const char *start_ptr = attr->buf+start*attr->esz;
+    const char *start_ptr = buf+start*attr->esz;
     ssa_cpy(slice, 0, start_ptr, slice_sz);
     //we already checked that slice_sz can fit in slice, so set its new len
     oattr->len = (end-start);
 }
 
 //helper method
-void* _ssa_new(struct ssa_attr *attr, size_t alloc, size_t esz, const void *init, size_t init_sz)
+void* _ssa_new(struct ssa_attr *attr, void *array, size_t alloc, size_t esz, const void *init, size_t init_sz)
 {
     //we must init an even number of elements
     assert(init_sz%esz==0);
     assert(alloc%esz==0);
+    char *buf = array;
+    
+    //store the array-ssa_attr in the padding and/or the _pdiff member
+    *SSA_PDIFF(array) = buf-(char*)attr;
     
     attr->alloc = alloc;
     attr->esz = esz;
     
     if(init && init_sz) {
         size_t count = SUC_MIN(alloc, init_sz);
-        memcpy(attr->buf, init, count);
+        memcpy(buf, init, count);
         attr->len = count/esz;
     }
     else {
         attr->len = 0;
     }
     //a bit meaningless, but return a ptr to buf
-    return attr->buf;
+    return array;
 }
 
 
@@ -118,9 +125,10 @@ void* _ssa_new(struct ssa_attr *attr, size_t alloc, size_t esz, const void *init
 #include <assert.h>
 #include <stdio.h>
 #include <stdint.h>
+#include <inttypes.h>
 
 struct test_uint{
-    struct ssa_attr does_not_matter;
+    struct ssa_attr attr;
     uint32_t array[100];
 };
 
@@ -139,14 +147,32 @@ void print_ssa_attr(struct ssa_attr *attr)
     printf("ptr     %p\n", attr);
     printf("  alloc %zu\n", attr->alloc);
     printf("  len   %zu\n", attr->len);
-    printf("  esz   %zu\n", attr->esz);
+    printf("  esz   %u\n", attr->esz);
 }
 
 int main(void) {
     struct test_uint t1;
-    uint32_t *a1 = ssa_new_empty(&t1, array);
+    //make mem view a bit easier to look at
+    memset(&t1, 0, sizeof(t1));
+    
+    uint32_t* a1 = ssa_new_empty(&t1.attr, t1.array);
+    
+    #if 0
+    for(char* c=(char*)&t1; c<(char*)t1.array; c++) {
+        printf(" t1 %p = %"PRIu8"\n", c, (uint8_t)*c);
+    }
+    #endif
+    printf("*SSA_PDIFF(a1) = %u\n", *SSA_PDIFF(a1));
+    
+    assert(a1 == t1.array);
+    assert(SSA_PDIFF(a1) == SSA_PDIFF(t1.array));
+    assert(SSA_HDR(a1) == &t1.attr);
+    
     print_ssa_attr(SSA_HDR(a1));
+    
     assert(ssa_length(a1) == 0);
     assert(ssa_avail(a1) == sizeof(t1.array)/sizeof(t1.array[0]));
+    
+    return 0;
 }
 #endif
