@@ -139,16 +139,6 @@ struct test_uint{
     uint32_t padding[4];
 };
 
-struct node {
-    int x;
-    int y;
-};
-
-struct test_node{
-    struct ssa_attr does_not_matter;
-    struct node array[100];
-};
-
 void print_ssa_attr(struct ssa_attr *attr)
 {
     printf("ptr     %p\n", attr);
@@ -291,6 +281,36 @@ int main(void) {
     }
     
     
+    puts("\nTest push/pop");
+    ssa_clear(a1);
+    for(i=SUC_LEN(d1)-1; i>=0; i--) {
+        ssa_push(a1, d1[i]);
+    }
+    for(i=0; i<ssa_length(a1); i++) {
+        printf("a1[%d] = %u\n", i, ssa_get(a1, i));
+    }
+    assert(ssa_length(a1) == SUC_LEN(d1));
+    i = 3;
+    j = SUC_LEN(d1)-1-i;
+    assert(a1[i] == d1[j]);
+    
+    j = 0;
+    while(ssa_length(a1)) {
+        assert(ssa_pop(a1) == d1[j]);
+        j++;
+    }
+    assert(ssa_length(a1) == 0);
+    assert(ssa_pop(a1) == 0);
+    
+    ssa_replace(a1, a2);
+    i = ssa_length(a2)-1;
+    uint32_t *x;
+    while((x = ssa_pop_ptr(a1)) != NULL) {
+        printf("pop %u\n", *x);
+        assert(*x == a2[i]);
+        i--;
+    }
+    assert(ssa_length(a1) == 0);
     
     return 0;
 }

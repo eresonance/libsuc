@@ -175,7 +175,15 @@ void ssa_slice(const void *array, size_t start, size_t end, void *slice);
 //pop an item off the end of an ssa array, if there is one
 #define ssa_pop(array) ({ \
     struct ssa_attr *attr = SSA_HDR(array); \
-    attr->len ? (array)[--attr->len] : 0; \
+    const size_t ti = attr->len; \
+    ti ? (array)[--attr->len] : 0; \
+    })
+    
+//pop a pointer to the value at the end of an ssa array, if there is one
+#define ssa_pop_ptr(array) ({ \
+    struct ssa_attr *attr = SSA_HDR(array); \
+    const size_t ti = attr->len; \
+    ti ? (array) + --attr->len : NULL; \
     })
 
 //safely get an element of ssa array at an index
