@@ -44,6 +44,16 @@ typedef struct _suc_range {
 } suc_range;
 
 /**
+ * Range meta-data for use with for_daft_in
+ */
+typedef struct _suc_range_meta {
+    const suc_range *_r;
+    int _i;
+    int _end;
+    bool _d;
+} suc_range_meta;
+
+/**
  * Helper to make a range object, same prototype as in python.
  * 
  * range(stop)
@@ -83,7 +93,25 @@ typedef struct _suc_range {
  */
 #define for_ex_in(var, range) for(const suc_range *_r=(range); _r; _r=NULL) \
                               for(int _i=0, _end=abs((_r->stop - _r->start)/_r->step), _d=1; _d; _d=0) \
-                              for(var=_r->start; _i < _end; var += _r->step, _i++)
+                              for((var)=_r->start; _i < _end; (var) += _r->step, _i++)
+
+/**
+ * Loop over a range using a struct to hold the meta-info.
+ * Useful for using these ranges in a daft function.
+ *
+ * for_daft_in(stack->i, stack->range_meta, cfg->loop_range) {
+ *     ...
+ *     daft_yield(stack->ctx);
+ *     ...
+ * }
+ */
+#define for_daft_in(var, meta, range) \
+    /* init the meta struct */ \
+    for((meta)->_r=(range), (meta)->_i=0, (meta)->_end=abs(((meta)->_r->stop-(meta)->_r->start)/(meta)->_r->step), \
+            /* loop once, just for scope */ \
+            (meta)->_d=false; !((meta)->_d); (meta)->_d=true) \
+    /* the actual loop */ \
+    for((var)=(meta)->_r->start; (meta)->_i < (meta)->_end; (var) += (meta)->_r->step, (meta)->_i++)
 
 // Internal stuff below, don't use these directly
 #define _range_obj_1(astop)                (suc_range)_range_const_1(astop)
