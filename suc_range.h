@@ -29,9 +29,6 @@
 #ifndef _SUC_RANGE_H_
 #define _SUC_RANGE_H_
 
-//for abs
-#include <stdlib.h>
-
 #include "suc_macros.h"
 
 /**
@@ -76,7 +73,7 @@ typedef struct _suc_range_meta {
  * }
  */
 #define for_in(var, range) for(const suc_range *_r=(range); _r; _r=NULL) \
-                           for(int _i=0, _end=abs((_r->stop - _r->start)/_r->step), _d=1; _d; _d=0) \
+                           for(int _i=0, _end=_suc_calc_end(_r), _d=1; _d; _d=0) \
                            for(int var=_r->start; _i < _end; var += _r->step, _i++)
 
 /**
@@ -92,7 +89,7 @@ typedef struct _suc_range_meta {
  * if(i < timeout) <error>
  */
 #define for_ex_in(var, range) for(const suc_range *_r=(range); _r; _r=NULL) \
-                              for(int _i=0, _end=abs((_r->stop - _r->start)/_r->step), _d=1; _d; _d=0) \
+                              for(int _i=0, _end=_suc_calc_end(_r), _d=1; _d; _d=0) \
                               for((var)=_r->start; _i < _end; (var) += _r->step, _i++)
 
 /**
@@ -107,7 +104,7 @@ typedef struct _suc_range_meta {
  */
 #define for_daft_in(var, meta, range) \
     /* init the meta struct */ \
-    for((meta)->_r=(range), (meta)->_i=0, (meta)->_end=abs(((meta)->_r->stop-(meta)->_r->start)/(meta)->_r->step), \
+    for((meta)->_r=(range), (meta)->_i=0, (meta)->_end=_suc_calc_end((meta)->_r), \
             /* loop once, just for scope */ \
             (meta)->_d=false; !((meta)->_d); (meta)->_d=true) \
     /* the actual loop */ \
@@ -120,5 +117,30 @@ typedef struct _suc_range_meta {
 #define _range_const_1(astop)                {.start=0, .stop=(astop), .step=1}
 #define _range_const_2(astart, astop)        {.start=(astart), .stop=(astop), .step=1}
 #define _range_const_3(astart, astop, astep) {.start=(astart), .stop=(astop), .step=(astep)}
+
+/**
+ * Calculate the end of the iterator
+ */
+static inline int _suc_calc_end(const suc_range *r)
+{
+    int start = r->start;
+    int stop = r->stop;
+    int step = r->step;
+
+    if((step > 0) && (start < stop)) {
+        //going up
+        return 1 + (stop - 1 - start)/step;
+    }
+    else if((step < 0) && (start > stop)) {
+        //going down
+        return 1 + (start - 1 - stop)/(0-step);
+    }
+    else if(step == 0) {
+        //invalid
+        return -1;
+    }
+    //otherwise no steps
+    return 0;
+}
 
 #endif //_SUC_RANGE_H_
