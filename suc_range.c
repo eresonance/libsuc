@@ -1,8 +1,26 @@
+#include "suc_range.h"
+
+int _suc_calc_end(const suc_range *r)
+{
+    if((r->step > 0) && (r->start < r->stop)) {
+        //going up
+        return 1 + (r->stop - 1 - r->start)/r->step;
+    }
+    else if((r->step < 0) && (r->start > r->stop)) {
+        //going down
+        return 1 + (r->start - 1 - r->stop)/(0-r->step);
+    }
+    else if(r->step == 0) {
+        //invalid
+        return -1;
+    }
+    //otherwise no steps
+    return 0;
+}
+
 #ifdef SUC_TEST_MAIN
 #include <assert.h>
 #include <stdio.h>
-
-#include "suc_range.h"
 
 int main(void)
 {

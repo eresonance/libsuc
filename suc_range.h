@@ -47,7 +47,6 @@ typedef struct _suc_range_meta {
     const suc_range *_r;
     int _i;
     int _end;
-    bool _d;
 } suc_range_meta;
 
 /**
@@ -73,8 +72,7 @@ typedef struct _suc_range_meta {
  * }
  */
 #define for_in(var, range) for(const suc_range *_r=(range); _r; _r=NULL) \
-                           for(int _i=0, _end=_suc_calc_end(_r), _d=1; _d; _d=0) \
-                           for(int var=_r->start; _i < _end; var += _r->step, _i++)
+                           for(int var=_r->start, _i=0, _end=_suc_calc_end(_r); _i < _end; var += _r->step, _i++)
 
 /**
  * Loop an existing var over a pointer to suc_range object.
@@ -89,7 +87,7 @@ typedef struct _suc_range_meta {
  * if(i < timeout) <error>
  */
 #define for_ex_in(var, range) for(const suc_range *_r=(range); _r; _r=NULL) \
-                              for(int _i=0, _end=_suc_calc_end(_r), _d=1; _d; _d=0) \
+                              for(int _i=0, _end=_suc_calc_end(_r); !_i;) \
                               for((var)=_r->start; _i < _end; (var) += _r->step, _i++)
 
 /**
@@ -104,9 +102,7 @@ typedef struct _suc_range_meta {
  */
 #define for_daft_in(var, meta, range) \
     /* init the meta struct */ \
-    for((meta)->_r=(range), (meta)->_i=0, (meta)->_end=_suc_calc_end((meta)->_r), \
-            /* loop once, just for scope */ \
-            (meta)->_d=false; !((meta)->_d); (meta)->_d=true) \
+    for((meta)->_r=(range), (meta)->_i=0, (meta)->_end=_suc_calc_end((meta)->_r); !((meta)->_i);) \
     /* the actual loop */ \
     for((var)=(meta)->_r->start; (meta)->_i < (meta)->_end; (var) += (meta)->_r->step, (meta)->_i++)
 
@@ -121,26 +117,6 @@ typedef struct _suc_range_meta {
 /**
  * Calculate the end of the iterator
  */
-static inline int _suc_calc_end(const suc_range *r)
-{
-    int start = r->start;
-    int stop = r->stop;
-    int step = r->step;
-
-    if((step > 0) && (start < stop)) {
-        //going up
-        return 1 + (stop - 1 - start)/step;
-    }
-    else if((step < 0) && (start > stop)) {
-        //going down
-        return 1 + (start - 1 - stop)/(0-step);
-    }
-    else if(step == 0) {
-        //invalid
-        return -1;
-    }
-    //otherwise no steps
-    return 0;
-}
+int _suc_calc_end(const suc_range *r);
 
 #endif //_SUC_RANGE_H_
